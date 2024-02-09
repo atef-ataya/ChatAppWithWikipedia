@@ -22,3 +22,24 @@ def create_embeddings(chunks):
     vector_store = Chroma.from_documents(chunks, embeddings)
     return vector_store
 
+def calculate_and_display_embedding_cost(texts):
+    import tiktoken
+    enc = tiktoken.encoding_for_model('text-embedding-ada-002')
+    total_tokens = sum([len(enc.encode(page.page_content)) for page in texts])
+    print(f'Total Tokens: {total_tokens}')
+    print(f'Embedding Cost in USD:{total_tokens / 1000 * 0.0004:.6f}')
+    return total_tokens, total_tokens / 1000 * 0.0004
+
+
+def chat_app_with_wikipedia(vector_store, query, chat_history=[], k=3):
+    from langchain.chains import ConversationalRetrievalChain
+    from langchain_openai import ChatOpenAI
+
+    llm = ChatOpenAI(temperature=1)
+    retriever = vector_store.as_retriever(search_type='similarity', search_kwargs={'k': k})
+
+    crc = ConversationalRetrievalChain.from_llm(llm, retriever)
+    result = crc.invoke({'question': query, 'chat_history': chat_history})
+    chat_history.append((query, result['answer']))
+
+    return result, chat_history
