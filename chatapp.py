@@ -4,7 +4,7 @@ from langchain.vectorstores import Chroma
 import os
 
 # function that answers to user's query from Wikipedia
-def chat_with_wikipedia(query, lang='en', load_max_docs=2):
+def load_wikipedia(query, lang='en', load_max_docs=10):
     from langchain.document_loaders import WikipediaLoader
     loader = WikipediaLoader(query=query, lang=lang, load_max_docs=load_max_docs)
     data = loader.load()
@@ -31,18 +31,18 @@ def calculate_and_display_embedding_cost(texts):
     return total_tokens, total_tokens / 1000 * 0.0004
 
 # Function that allows us to chat with Wikipedia
-def chat_app_with_wikipedia(vector_store, query, chat_history=[], k=3):
-    from langchain.chains import ConversationalRetrievalChain
+def chat_with_wikipedia(vector_store, query, k=3):
+    from langchain.chains import RetrievalQA
     from langchain_openai import ChatOpenAI
 
-    llm = ChatOpenAI(temperature=1)
+    llm = ChatOpenAI(model='gpt-4', temperature=1)
+
     retriever = vector_store.as_retriever(search_type='similarity', search_kwargs={'k': k})
 
-    crc = ConversationalRetrievalChain.from_llm(llm, retriever)
-    result = crc.invoke({'question': query, 'chat_history': chat_history})
-    chat_history.append((query, result['answer']))
+    chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever)
 
-    return result, chat_history
+    answer = chain.invoke(query)
+    return answer
 
 # Function to clear the history of chat from the session state
 def clear_history():
@@ -50,3 +50,52 @@ def clear_history():
         del st.session_state['history']
 
 # Add application entry point
+if __name__ == '__main__':
+    import os
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv(), override=True)
+    load_dotenv(find_dotenv(), override=True)
+
+    # Top main page content
+    st.image('./images/banner.jpg')
+    st.subheader('Chat with Wikipedia')
+    st.write(
+        "Check out this repository on my github profile [link](https://github.com/atef-ataya/ChatAppWithWikipedia)")
+    # creating the sidebar panel
+    with st.sidebar:
+        # saving the api key entered by the users into environment variable
+        api_key = st.text_input('OpenAI API Key', type='password')
+        subject = st.text_input('Please pick your topic from wikipedia')
+        chunk_size = st.number_input('Chunk size:', min_value=100, max_value=2048, value=512, on_change=clear_history)
+        k = st.number_input('K', min_value=1, max_value=20, value=3, on_change=clear_history)
+        add_data = st.button('Load Data', on_click=clear_history)
+
+        if subject and add_data and api_key:
+            with st.spinner('Reading, Chunking and embedding file ...'):
+                os.environ['OPENAI_API_KEY'] = api_key
+                data = load_wikipedia(subject, lang='en')
+                chunks = split_text_into_chunks(data)
+                st.write(f'Chunk size: {chunk_size}, chunks: {len(chunks)}')
+                tokens, embedding_cost = calculate_and_display_embedding_cost(chunks)
+                st.write(f'Embedding cost: ${embedding_cost:.4f}')
+                vector_store = create_embeddings(chunks)
+                st.session_state.vs = vector_store
+                st.success('Wikipedia uploaded, chunked, and embedded successfully!')
+        else:
+            st.write('Please provie your API_KEY and subject')
+
+    q = st.text_input('Ask a question about the content of your file:')
+    if q:
+        if 'vs' in st.session_state:
+            vector_store = st.session_state.vs
+            st.write(f'K: {k}')
+            answer = chat_with_wikipedia(vector_store, q, k)
+            st.text_area('LLM Answer: ', value=answer['result'])
+
+            st.divider()
+            if 'history' not in st.session_state:
+                st.session_state.history = ''
+            value = f'Q: {q} \nA:{answer}'
+            st.session_state.history = f'{value} \n {"-" * 100} \n {st.session_state.history}'
+            h = st.session_state.history
+            st.text_area('Chat history:', value=h, key='history', height=400)
