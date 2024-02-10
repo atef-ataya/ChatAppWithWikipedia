@@ -54,7 +54,6 @@ if __name__ == '__main__':
     import os
     from dotenv import load_dotenv, find_dotenv
     load_dotenv(find_dotenv(), override=True)
-    load_dotenv(find_dotenv(), override=True)
 
     # Top main page content
     st.image('./images/banner.jpg')
@@ -71,7 +70,7 @@ if __name__ == '__main__':
         add_data = st.button('Load Data', on_click=clear_history)
 
         if subject and add_data and api_key:
-            with st.spinner('Reading, Chunking and embedding file ...'):
+            with st.spinner('Loading, Chunking and embedding file ...'):
                 os.environ['OPENAI_API_KEY'] = api_key
                 data = load_wikipedia(subject, lang='en')
                 chunks = split_text_into_chunks(data)
@@ -80,17 +79,17 @@ if __name__ == '__main__':
                 st.write(f'Embedding cost: ${embedding_cost:.4f}')
                 vector_store = create_embeddings(chunks)
                 st.session_state.vs = vector_store
-                st.success('Wikipedia uploaded, chunked, and embedded successfully!')
+                st.success('Wikipedia information loaded, chunked, and embedded successfully!')
         else:
-            st.write('Please provie your API_KEY and subject')
+            st.write('Please provie your API_KEY and topic')
 
     q = st.text_input('Ask a question about the content of your file:')
     if q:
         if 'vs' in st.session_state:
             vector_store = st.session_state.vs
-            st.write(f'K: {k}')
-            answer = chat_with_wikipedia(vector_store, q, k)
-            st.text_area('LLM Answer: ', value=answer['result'])
+            with st.spinner('Getting the information ...'):
+                answer = chat_with_wikipedia(vector_store, q, k)
+                st.text_area('LLM Answer: ', value=answer['result'])
 
             st.divider()
             if 'history' not in st.session_state:
